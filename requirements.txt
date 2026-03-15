@@ -6,3 +6,5 @@ alembic
 redis[asyncio]
 python-dotenv
 websockets
+python-jose[cryptography]  # JWT token encoding/decoding
+passlib[bcrypt]            # password hashing
