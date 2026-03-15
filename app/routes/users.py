@@ -9,4 +9,4 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.Post('/register', response_model=schemas.UserCreate)
-async def register(user: UserCreate, )
+async def register(user: schemas.UserCreate, )

@@ -7,10 +7,7 @@ from datetime import datetime
 class Base(BaseModel):
     username: str
     displayname: str
-    status: UserStatus
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
+    
 
     
 
@@ -21,3 +18,7 @@ class CreateUser(Base):
 
 class UserResponse(Base):
     id: int
+    status: UserStatus
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
