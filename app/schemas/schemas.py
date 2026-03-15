@@ -9,8 +9,6 @@ class Base(BaseModel):
     displayname: str
     
 
-    
-
 
 class CreateUser(Base):
     password: str
