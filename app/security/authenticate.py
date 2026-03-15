@@ -8,3 +8,121 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+
+
+oauth_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)   # was: get_context.verify (bug)
+
+
+# ─── JWT ──────────────────────────────────────────────────────────────────────
+
+def create_access_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {"sub": str(user_id), "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)  # was: missing return (bug)
+
+
+def decode_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
+# ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+def authenticate_user(username: str, password: str, db: Session) -> Optional[User]:
+    # was: db.query(User).filter(User.username == username & ...) — & is bitwise, wrong (bug)
+    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if not user:
+        return None
+    if not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+
+# ─── Sync dependency (used by sync routes) ───────────────────────────────────
+
+def get_current_user(
+    token: str = Depends(oauth_scheme),  # was: credentials.credentials on a plain str (bug)
+    db: Session = Depends(get_db),
+) -> User:
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise exc
+
+    user_id = decode_token(token)
+    if not user_id:
+        raise exc
+
+    # was: await db.execute(...) inside a sync function (bug)
+    user = db.execute(
+        select(User).where(User.id == int(user_id), User.is_active == True)
+    ).scalar_one_or_none()
+
+    if not user:
+        raise exc
+    return user
+
+
+# ─── Async dependency (used by async routes + WebSocket) ─────────────────────
+
+async def get_current_user_async(
+    token: str = Depends(oauth_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise exc
+
+    user_id = decode_token(token)
+    if not user_id:
+        raise exc
+
+    result = db.execute(
+        select(User).where(User.id == int(user_id), User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise exc
+    return user
+
+
+# ─── WebSocket auth (token as query param) ────────────────────────────────────
+
+async def get_ws_user(
+    token: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    exc = HTTPException(status_code=401, detail="Unauthorized")
+    if not token:
+        raise exc
+
+    user_id = decode_token(token)
+    if not user_id:
+        raise exc
+
+    result = await db.execute(
+        select(User).where(User.id == int(user_id), User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise exc
+    return user
