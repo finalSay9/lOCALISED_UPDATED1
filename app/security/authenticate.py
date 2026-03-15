@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.database import get_db
+from app.models.models import User
+
 
 oauth_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
