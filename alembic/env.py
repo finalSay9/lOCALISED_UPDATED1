@@ -1,5 +1,7 @@
 from logging.config import fileConfig
-
+import sys
+import os
+sys.path.insert(0, "/app") 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from app.core.database import Base
